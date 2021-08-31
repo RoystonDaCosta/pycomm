@@ -1,3 +1,6 @@
+Hyper Specific Usage to work with lower python version. 2.3.4
+Dont use otheriwse
+
 pycomm
 ======
 pycomm is a package that includes a collection of modules used to communicate with PLCs.

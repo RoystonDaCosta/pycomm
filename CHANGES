@@ -1,6 +1,8 @@
 CHANGES
 =======
 
+Deviated to run on lower python version. 2.3.4
+
 1.0.8
 -----
 Number 0001:
