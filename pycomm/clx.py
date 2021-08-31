@@ -23,17 +23,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 #
-from pycomm.cip.cip_base import *
-import logging
-try:  # Python 2.7+
-    from logging import NullHandler
-except ImportError:
-    class NullHandler(logging.Handler):
-        def emit(self, record):
-            pass
-
-logger = logging.getLogger(__name__)
-logger.addHandler(NullHandler())
+from cip_base import *
+from cip_const import *
 
 string_sizes = [82, 12, 16, 20, 40, 8]
 
@@ -104,7 +95,7 @@ class Driver(Base):
                 self._tag_list.append({'instance_id': instance,
                                        'tag_name': tag_name,
                                        'symbol_type': symbol_type})
-        except Exception as e:
+        except Exception, e:
             raise DataError(e)
 
         if status == SUCCESS:
@@ -163,7 +154,7 @@ class Driver(Base):
 
             return self._buffer
 
-        except Exception as e:
+        except Exception, e:
             raise DataError(e)
 
     def _parse_template(self, start_tag_ptr, status):
@@ -183,8 +174,7 @@ class Driver(Base):
         elif status == 0x06:
             self._byte_offset += bytes_received
         else:
-            self._status = (1, 'unknown status {0} during _parse_template'.format(status))
-            logger.warning(self._status)
+            self._status = (1, 'unknown status '+status+' during _parse_template')
             self._last_instance = -1
 
     def _parse_fragment(self, start_ptr, status):
@@ -197,7 +187,7 @@ class Driver(Base):
         try:
             data_type = unpack_uint(self._reply[start_ptr:start_ptr+2])
             fragment_returned = self._reply[start_ptr+2:]
-        except Exception as e:
+        except Exception, e:
             raise DataError(e)
 
         fragment_returned_length = len(fragment_returned)
@@ -211,7 +201,7 @@ class Driver(Base):
                 else:
                     value = UNPACK_DATA_FUNCTION[typ](fragment_returned[idx:idx+DATA_FUNCTION_SIZE[typ]])
                 idx += DATA_FUNCTION_SIZE[typ]
-            except Exception as e:
+            except Exception, e:
                 raise DataError(e)
             if self._output_raw:
                 self._tag_list += value
@@ -224,8 +214,7 @@ class Driver(Base):
         elif status == 0x06:
             self._byte_offset += fragment_returned_length
         else:
-            self._status = (2, '{0}: {1}'.format(SERVICE_STATUS[status], get_extended_status(self._reply, 48)))
-            logger.warning(self._status)
+            self._status = (2, SERVICE_STATUS[status]+': '+get_extended_status(self._reply, 48))
             self._byte_offset = -1
 
     def _parse_multiple_request_read(self, tags):
@@ -259,7 +248,7 @@ class Driver(Base):
                 tag_list.append(self._last_tag_read)
 
             return tag_list
-        except Exception as e:
+        except Exception, e:
             raise DataError(e)
 
     def _parse_multiple_request_write(self, tags):
@@ -287,7 +276,7 @@ class Driver(Base):
 
                 tag_list.append(self._last_tag_write)
             return tag_list
-        except Exception as e:
+        except Exception, e:
             raise DataError(e)
 
     def _check_reply(self):
@@ -304,16 +293,14 @@ class Driver(Base):
 
             # Encapsulation status check
             if unpack_dint(self._reply[8:12]) != SUCCESS:
-                self._status = (3, "{0} reply status:{1}".format(REPLAY_INFO[typ],
-                                                                 SERVICE_STATUS[unpack_dint(self._reply[8:12])]))
+                self._status = (3, REPLAY_INFO[typ]+" reply status:"+SERVICE_STATUS[unpack_dint(self._reply[8:12])])
                 return False
 
             # Command Specific Status check
             if typ == unpack_uint(ENCAPSULATION_COMMAND["send_rr_data"]):
                 status = unpack_usint(self._reply[42:43])
                 if status != SUCCESS:
-                    self._status = (3, "send_rr_data reply:{0} - Extend status:{1}".format(
-                        SERVICE_STATUS[status], get_extended_status(self._reply, 42)))
+                    self._status = (3, "send_rr_data reply:"+SERVICE_STATUS[status]+" - Extend status:"+get_extended_status(self._reply, 42))
                     return False
                 else:
                     return True
@@ -336,15 +323,13 @@ class Driver(Base):
                     self._status = (3, "Insufficient Packet Space")
                     self._more_packets_available = True
                 elif status != SUCCESS:
-                    self._status = (3, "send_unit_data reply:{0} - Extend status:{1}".format(
-                        SERVICE_STATUS[status], get_extended_status(self._reply, 48)))
-                    logger.warning(self._status)
+                    self._status = (3, "send_unit_data reply:"+SERVICE_STATUS[status]+" - Extend status:"+get_extended_status(self._reply, 48))
                     return False
                 else:
                     return True
 
             return True
-        except Exception as e:
+        except Exception, e:
             raise DataError(e)
 
     def read_tag(self, tag):
@@ -368,7 +353,6 @@ class Driver(Base):
         if not self._target_is_connected:
             if not self.forward_open():
                 self._status = (6, "Target did not connected. read_tag will not be executed.")
-                logger.warning(self._status)
                 raise DataError("Target did not connected. read_tag will not be executed.")
 
         if multi_requests:
@@ -376,21 +360,21 @@ class Driver(Base):
             for t in tag:
                 rp = create_tag_rp(t, multi_requests=True)
                 if rp is None:
-                    self._status = (6, "Cannot create tag {0} request packet. read_tag will not be executed.".format(tag))
-                    raise DataError("Cannot create tag {0} request packet. read_tag will not be executed.".format(tag))
+                    self._status = (6, "Cannot create tag "+tag+" request packet. read_tag will not be executed.")
+                    raise DataError("Cannot create tag "+tag+" request packet. read_tag will not be executed.")
                 else:
                     rp_list.append(chr(TAG_SERVICES_REQUEST['Read Tag']) + rp + pack_uint(1))
-            message_request = build_multiple_service(rp_list, Base._get_sequence())
+            message_request = build_multiple_service(rp_list, self._get_sequence())
 
         else:
             rp = create_tag_rp(tag)
             if rp is None:
-                self._status = (6, "Cannot create tag {0} request packet. read_tag will not be executed.".format(tag))
+                self._status = (6, "Cannot create tag "+tag+" request packet. read_tag will not be executed.")
                 return None
             else:
                 # Creating the Message Request Packet
                 message_request = [
-                    pack_uint(Base._get_sequence()),
+                    pack_uint(self._get_sequence()),
                     chr(TAG_SERVICES_REQUEST['Read Tag']),  # the Request Service
                     chr(len(rp) / 2),                       # the Request Path Size length in word
                     rp,                                     # the request path
@@ -414,7 +398,7 @@ class Driver(Base):
                 data_type = unpack_uint(self._reply[50:52])
                 try:
                     return UNPACK_DATA_FUNCTION[I_DATA_TYPE[data_type]](self._reply[52:]), I_DATA_TYPE[data_type]
-                except Exception as e:
+                except Exception, e:
                     raise DataError(e)
             else:
                 return None
@@ -434,7 +418,6 @@ class Driver(Base):
         if not self._target_is_connected:
             if not self.forward_open():
                 self._status = (7, "Target did not connected. read_tag will not be executed.")
-                logger.warning(self._status)
                 raise DataError("Target did not connected. read_tag will not be executed.")
 
         self._byte_offset = 0
@@ -448,12 +431,12 @@ class Driver(Base):
         while self._byte_offset != -1:
             rp = create_tag_rp(tag)
             if rp is None:
-                self._status = (7, "Cannot create tag {0} request packet. read_tag will not be executed.".format(tag))
+                self._status = (7, "Cannot create tag "+tag+" request packet. read_tag will not be executed.")
                 return None
             else:
                 # Creating the Message Request Packet
                 message_request = [
-                    pack_uint(Base._get_sequence()),
+                    pack_uint(self._get_sequence()),
                     chr(TAG_SERVICES_REQUEST["Read Tag Fragmented"]),  # the Request Service
                     chr(len(rp) / 2),                                  # the Request Path Size length in word
                     rp,                                                # the request path
@@ -507,7 +490,6 @@ class Driver(Base):
         if not self._target_is_connected:
             if not self.forward_open():
                 self._status = (8, "Target did not connected. write_tag will not be executed.")
-                logger.warning(self._status)
                 raise DataError("Target did not connected. write_tag will not be executed.")
 
         if multi_requests:
@@ -518,7 +500,7 @@ class Driver(Base):
                 # Create the request path to wrap the tag name
                 rp = create_tag_rp(name, multi_requests=True)
                 if rp is None:
-                    self._status = (8, "Cannot create tag{0} req. packet. write_tag will not be executed".format(tag))
+                    self._status = (8, "Cannot create tag"+tag+" req. packet. write_tag will not be executed")
                     return None
                 else:
                     try:    # Trying to add the rp to the request path list
@@ -531,8 +513,8 @@ class Driver(Base):
                             + val
                         )
                         idx += 1
-                    except (LookupError, struct.error) as e:
-                        self._status = (8, "Tag:{0} type:{1} removed from write list. Error:{2}.".format(name, typ, e))
+                    except (LookupError, struct.error), e:
+                        self._status = (8, "Tag:"+name+" type:"+typ+" removed from write list. Error:"+e+".")
 
                         # The tag in idx position need to be removed from the rp list because has some kind of error
                         tag_to_remove.append(idx)
@@ -541,7 +523,7 @@ class Driver(Base):
             for position in tag_to_remove:
                 del tag[position]
             # Create the message request
-            message_request = build_multiple_service(rp_list, Base._get_sequence())
+            message_request = build_multiple_service(rp_list, self._get_sequence())
 
         else:
             if isinstance(tag, tuple):
@@ -551,13 +533,12 @@ class Driver(Base):
 
             rp = create_tag_rp(name)
             if rp is None:
-                self._status = (8, "Cannot create tag {0} request packet. write_tag will not be executed.".format(tag))
-                logger.warning(self._status)
+                self._status = (8, "Cannot create tag "+tag+" request packet. write_tag will not be executed.")
                 return None
             else:
                 # Creating the Message Request Packet
                 message_request = [
-                    pack_uint(Base._get_sequence()),
+                    pack_uint(self._get_sequence()),
                     chr(TAG_SERVICES_REQUEST["Write Tag"]),   # the Request Service
                     chr(len(rp) / 2),               # the Request Path Size length in word
                     rp,                             # the request path
@@ -594,13 +575,11 @@ class Driver(Base):
         self.clear()
         if not isinstance(values, list):
             self._status = (9, "A list of tags must be passed to write_array.")
-            logger.warning(self._status)
             raise DataError("A list of tags must be passed to write_array.")
 
         if not self._target_is_connected:
             if not self.forward_open():
                 self._status = (9, "Target did not connected. write_array will not be executed.")
-                logger.warning(self._status)
                 raise DataError("Target did not connected. write_array will not be executed.")
 
         array_of_values = ""
@@ -618,13 +597,12 @@ class Driver(Base):
                 # create the message and send the fragment
                 rp = create_tag_rp(tag)
                 if rp is None:
-                    self._status = (9, "Cannot create tag {0} request packet. \
-                        write_array will not be executed.".format(tag))
+                    self._status = (9, "Cannot create tag "+tag+" request packet. write_array will not be executed.")
                     return None
                 else:
                     # Creating the Message Request Packet
                     message_request = [
-                        pack_uint(Base._get_sequence()),
+                        pack_uint(self._get_sequence()),
                         chr(TAG_SERVICES_REQUEST["Write Tag Fragmented"]),  # the Request Service
                         chr(len(rp) / 2),                                   # the Request Path Size length in word
                         rp,                                                 # the request path
@@ -656,7 +634,6 @@ class Driver(Base):
             if not self._target_is_connected:
                 if not self.forward_open():
                     self._status = (10, "Target did not connected. get_tag_list will not be executed.")
-                    logger.warning(self._status)
                     raise DataError("Target did not connected. get_tag_list will not be executed.")
 
             self._last_instance = 0
@@ -667,7 +644,7 @@ class Driver(Base):
                 # Creating the Message Request Packet
 
                 message_request = [
-                    pack_uint(Base._get_sequence()),
+                    pack_uint(self._get_sequence()),
                     chr(TAG_SERVICES_REQUEST['Get Instance Attributes List']),  # STEP 1
                     # the Request Path Size length in word
                     chr(3),
@@ -694,7 +671,7 @@ class Driver(Base):
 
             self._get_template_in_progress = False
 
-        except Exception as e:
+        except Exception, e:
             raise DataError(e)
 
     def _get_structure_makeup(self, instance_id):
@@ -704,7 +681,6 @@ class Driver(Base):
         if not self._target_is_connected:
             if not self.forward_open():
                 self._status = (10, "Target did not connected. get_tag_list will not be executed.")
-                logger.warning(self._status)
                 raise DataError("Target did not connected. get_tag_list will not be executed.")
 
         message_request = [
@@ -731,6 +707,17 @@ class Driver(Base):
 
         return self._buffer
 
+    def _get_sequence(self):
+        """ Increase and return the sequence used with connected messages
+
+        :return: The New sequence
+        """
+        if Base._sequence < 65535:
+            Base._sequence += 1
+        else:
+            Base._sequence = getpid() % 65535
+        return Base._sequence
+
     def _read_template(self, instance_id, object_definition_size):
         """ get a list of the tags in the plc
 
@@ -738,7 +725,6 @@ class Driver(Base):
         if not self._target_is_connected:
             if not self.forward_open():
                 self._status = (10, "Target did not connected. get_tag_list will not be executed.")
-                logger.warning(self._status)
                 raise DataError("Target did not connected. get_tag_list will not be executed.")
 
         self._byte_offset = 0
@@ -771,7 +757,7 @@ class Driver(Base):
             self._get_template_in_progress = False
             return self._buffer
 
-        except Exception as e:
+        except Exception, e:
             raise DataError(e)
 
     def _isolating_user_tag(self):
@@ -781,12 +767,12 @@ class Driver(Base):
             for tag in lst:
                     if tag['tag_name'].find(':') != -1 or tag['tag_name'].find('__') != -1:
                         continue
-                    if tag['symbol_type'] & 0b0001000000000000:
+                    if tag['symbol_type'] & 4096 :
                         continue
-                    dimension = (tag['symbol_type'] & 0b0110000000000000) >> 13
+                    dimension = (tag['symbol_type'] & 24576) >> 13
 
-                    if tag['symbol_type'] & 0b1000000000000000 :
-                        template_instance_id = tag['symbol_type'] & 0b0000111111111111
+                    if tag['symbol_type'] & 32768 :
+                        template_instance_id = tag['symbol_type'] & 4095
                         tag_type = 'struct'
                         data_type = 'user-created'
                         self._tag_list.append({'instance_id': tag['instance_id'],
@@ -799,10 +785,10 @@ class Driver(Base):
                                                'udt': {}})
                     else:
                         tag_type = 'atomic'
-                        datatype = tag['symbol_type'] & 0b0000000011111111
+                        datatype = tag['symbol_type'] & 255
                         data_type = I_DATA_TYPE[datatype]
                         if datatype == 0xc1:
-                            bit_position = (tag['symbol_type'] & 0b0000011100000000) >> 8
+                            bit_position = (tag['symbol_type'] & 1792) >> 8
                             self._tag_list.append({'instance_id': tag['instance_id'],
                                                    'tag_name':  tag['tag_name'],
                                                    'dim': dimension,
@@ -815,7 +801,7 @@ class Driver(Base):
                                                    'dim': dimension,
                                                    'tag_type': tag_type,
                                                    'data_type': data_type})
-        except Exception as e:
+        except Exception, e:
             raise DataError(e)
 
     def _parse_udt_raw(self, tag):
@@ -841,7 +827,7 @@ class Driver(Base):
 
             type_list = []
 
-            for i in xrange(member_count):
+            for i in range(member_count):
                 # skip member 1
 
                 if i != 0:
@@ -857,7 +843,7 @@ class Driver(Base):
                 buff = buff[8:]
 
             tag['udt']['data_type'] = type_list
-        except Exception as e:
+        except Exception, e:
             raise DataError(e)
 
     def get_tag_list(self):

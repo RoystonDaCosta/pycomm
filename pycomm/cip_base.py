@@ -29,19 +29,9 @@ import socket
 import random
 
 from os import getpid
-from pycomm.cip.cip_const import *
-from pycomm.common import PycommError
+from cip_const import *
+from common import PycommError
 
-
-import logging
-try:  # Python 2.7+
-    from logging import NullHandler
-except ImportError:
-    class NullHandler(logging.Handler):
-        def emit(self, record):
-            pass
-logger = logging.getLogger(__name__)
-logger.addHandler(NullHandler())
 
 
 class CommError(PycommError):
@@ -205,7 +195,7 @@ PACK_PCCC_DATA_FUNCTION = {
 def print_bytes_line(msg):
     out = ''
     for ch in msg:
-        out += "{:0>2x}".format(ord(ch))
+        out += '%(ch)02x' % {"ch": ord(ch)}
     return out
 
 
@@ -216,9 +206,9 @@ def print_bytes_msg(msg, info=''):
     column = 0
     for idx, ch in enumerate(msg):
         if new_line:
-            out += "\n({:0>4d}) ".format(line * 10)
+            out += '\n%(line)04d' % {"line": line*10}
             new_line = False
-        out += "{:0>2x} ".format(ord(ch))
+        out += '%(ch)02x' % {"ch": ord(ch)}
         if column == 9:
             new_line = True
             column = 0
@@ -252,7 +242,7 @@ def get_extended_status(msg, start):
         else:
             return 'Extended Status Size Unknown'
     try:
-        return '{0}'.format(EXTEND_CODES[status][extended_status])
+        return EXTEND_CODES[status][extended_status]
     except LookupError:
         return "Extended Status info not present"
 
@@ -455,7 +445,7 @@ class Socket:
 
                 chunks.append(chunk)
                 bytes_recd += len(chunk)
-            except socket.error as e:
+            except socket.error, e:
                 raise CommError(e)
         return ''.join(chunks)
 
@@ -534,8 +524,7 @@ class Base(object):
     def _check_reply(self):
         raise Socket.ImplementationError("The method has not been implemented")
 
-    @staticmethod
-    def _get_sequence():
+    def _get_sequence(self):
         """ Increase and return the sequence used with connected messages
 
         :return: The New sequence
@@ -558,12 +547,10 @@ class Base(object):
         return self._device_description
 
     def generate_cid(self):
-        self.attribs['cid'] = '{0}{1}{2}{3}'.format(chr(random.randint(0, 255)), chr(random.randint(0, 255))
-                                                    , chr(random.randint(0, 255)), chr(random.randint(0, 255)))
+        self.attribs['cid'] = chr(random.randint(0, 255))+chr(random.randint(0, 255)) + chr(random.randint(0, 255))+chr(random.randint(0, 255))
 
     def generate_vsn(self):
-        self.attribs['vsn'] = '{0}{1}{2}{3}'.format(chr(random.randint(0, 255)), chr(random.randint(0, 255))
-                                                    , chr(random.randint(0, 255)), chr(random.randint(0, 255)))
+        self.attribs['vsn'] = chr(random.randint(0, 255))+chr(random.randint(0, 255))+chr(random.randint(0, 255))+chr(random.randint(0, 255))
 
     def description(self):
         return self._device_description
@@ -580,7 +567,7 @@ class Base(object):
             try:
                 self._device_description = self._reply[63:-1]
                 return True
-            except Exception as e:
+            except Exception, e:
                 raise CommError(e)
         return False
 
@@ -638,7 +625,7 @@ class Base(object):
             h += self.attribs['context']                # Sender Context 8 bytes
             h += pack_dint(self.attribs['option'])      # Option UDINT
             return h
-        except Exception as e:
+        except Exception, e:
             raise CommError(e)
 
     def register_session(self):
@@ -657,11 +644,9 @@ class Base(object):
         self._receive()
         if self._check_reply():
             self._session = unpack_dint(self._reply[4:8])
-            logger.debug("Session ={0} has been registered.".format(print_bytes_line(self._reply[4:8])))
             return self._session
 
         self._status = 'Warning ! the session has not been registered.'
-        logger.warning(self._status)
         return None
 
     def forward_open(self):
@@ -777,7 +762,6 @@ class Base(object):
             self._target_is_connected = False
             return True
         self._status = (5, "forward_close returned False")
-        logger.warning(self._status)
         return False
 
     def un_register_session(self):
@@ -794,9 +778,8 @@ class Base(object):
         :return: true if no error otherwise false
         """
         try:
-            logger.debug(print_bytes_msg(self._message, '-------------- SEND --------------'))
             self.__sock.send(self._message)
-        except Exception as e:
+        except Exception, e:
             # self.clean_up()
             raise CommError(e)
 
@@ -807,8 +790,7 @@ class Base(object):
         """
         try:
             self._reply = self.__sock.receive()
-            logger.debug(print_bytes_msg(self._reply, '----------- RECEIVE -----------'))
-        except Exception as e:
+        except Exception, e:
             # self.clean_up()
             raise CommError(e)
 
@@ -838,7 +820,7 @@ class Base(object):
                 # not sure but maybe I can remove this because is used to clean up any previous unclosed connection
                 self.forward_close()
                 return True
-            except Exception as e:
+            except Exception, e:
                 # self.clean_up()
                 raise CommError(e)
 
@@ -853,17 +835,15 @@ class Base(object):
                 self.forward_close()
             if self._session != 0:
                 self.un_register_session()
-        except Exception as e:
+        except Exception, e:
             error_string += "Error on close() -> session Err: %s" % e.message
-            logger.warning(error_string)
 
         # %GLA must do a cleanup __sock.close()
         try:
             if self.__sock:
                 self.__sock.close()
-        except Exception as e:
+        except Exception, e:
             error_string += "; close() -> __sock.close Err: %s" % e.message
-            logger.warning(error_string)
 
         self.clean_up()
 
