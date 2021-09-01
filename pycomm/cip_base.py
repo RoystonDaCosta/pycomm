@@ -195,6 +195,7 @@ PACK_PCCC_DATA_FUNCTION = {
 def print_bytes_line(msg):
     out = ''
     for ch in msg:
+        #out += "{:0>2x}".format(ord(ch))
         out += '%(ch)02x' % {"ch": ord(ch)}
     return out
 
@@ -206,8 +207,10 @@ def print_bytes_msg(msg, info=''):
     column = 0
     for idx, ch in enumerate(msg):
         if new_line:
+            #out += "\n({:0>4d}) ".format(line * 10)
             out += '\n%(line)04d' % {"line": line*10}
             new_line = False
+        #out += "{:0>2x} ".format(ord(ch))
         out += '%(ch)02x' % {"ch": ord(ch)}
         if column == 9:
             new_line = True
@@ -242,7 +245,7 @@ def get_extended_status(msg, start):
         else:
             return 'Extended Status Size Unknown'
     try:
-        return EXTEND_CODES[status][extended_status]
+        return ''+EXTEND_CODES[status][extended_status]
     except LookupError:
         return "Extended Status info not present"
 
@@ -401,7 +404,7 @@ def parse_multiple_request(message, tags, typ):
 
 class Socket:
 
-    def __init__(self, timeout=5.0):
+    def __init__(self, timeout=1.0):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.settimeout(timeout)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
@@ -467,13 +470,13 @@ def parse_symbol_type(symbol):
 
 class Base(object):
     _sequence = 0
-
+    _temp = False
 
     def __init__(self):
         if Base._sequence == 0:
             Base._sequence = getpid()
         else:
-            Base._sequence = Base._get_sequence()
+            Base._sequence = self._get_sequence()
 
         self.__version__ = '0.3'
         self.__sock = None
